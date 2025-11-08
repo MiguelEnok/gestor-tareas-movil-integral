@@ -1,13 +1,15 @@
 import { updateDoc } from 'firebase/firestore';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react'; // 👈 ¡Importar useState!
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { db, deleteDoc, doc } from '../screens/firebaseConfig';
 
 export default function TaskItem({ item }) {
+  const [isEditing, setIsEditing] = useState(false); // 🟢 Estado para saber si estamos editando
+  const [editedText, setEditedText] = useState(item.text); // 🟢 Estado para guardar el texto que se edita
   const isCompleted = item.completada;
 
   const deleteTask = async () => {
     try {
-      // Eliminar el documento de la colección 'tasks' en Firestore
       await deleteDoc(doc(db, 'tasks', item.id));
     } catch (error) {
       console.error("Error al eliminar la tarea: ", error);
@@ -17,21 +19,72 @@ export default function TaskItem({ item }) {
 
   const markTaskAsCompleted = async () => {
     try {
-      await updateDoc(doc(db, 'tasks', item.id), { completada: true });
+      // Alternamos el estado de 'completada' (true a false, o viceversa)
+      await updateDoc(doc(db, 'tasks', item.id), { completada: !isCompleted });
     } catch (error) {
-      console.error("Error al eliminar la tarea: ", error);
-      alert("No se pudo eliminar la tarea. Inténtalo de nuevo.");
+      console.error("Error al marcar la tarea: ", error);
+      alert("No se pudo actualizar la tarea. Inténtalo de nuevo.");
+    }
+  };
+
+  // 🟢 FUNCIÓN PARA GUARDAR LA EDICIÓN EN FIRESTORE
+  const saveEdit = async () => {
+    if (editedText.trim() === item.text) {
+        // Si el texto no cambió, solo salimos del modo edición
+        setIsEditing(false);
+        return;
+    }
+    
+    if (!editedText.trim()) {
+      // Si el texto está vacío, quizás queramos borrar la tarea o restablecer el texto
+      alert('La tarea no puede estar vacía.');
+      setEditedText(item.text); // Restablecer al texto original
+      setIsEditing(false);
+      return;
+    }
+    
+    try {
+      // 🚀 Actualizar el documento en Firestore
+      await updateDoc(doc(db, 'tasks', item.id), { text: editedText });
+      setIsEditing(false); // Salir del modo edición
+    } catch (error) {
+      console.error("Error al editar la tarea: ", error);
+      alert("No se pudo guardar la edición. Inténtalo de nuevo.");
     }
   };
 
   return (
     <View style={styles.taskContainer}>
-      <Text style={styles.taskText}>{item.text}</Text>
-      <TouchableOpacity onPress={markTaskAsCompleted} 
-        style={ isCompleted ? styles.markedButton : styles.unMarkedButton      
-        }>
-        <Text style={{ color: '#fff', fontSize: 20 }}>√</Text>
+      {isEditing ? (
+        // 🟢 MODO EDICIÓN: Muestra un TextInput
+        <TextInput
+          style={styles.taskInput}
+          value={editedText}
+          onChangeText={setEditedText}
+          onBlur={saveEdit} // 👈 Guardar al perder el foco (al terminar de escribir)
+          autoFocus={true}
+        />
+      ) : (
+        // 🟢 MODO VISUALIZACIÓN: Muestra el Text y permite entrar al modo edición
+        <TouchableOpacity 
+          style={styles.taskTextWrapper} 
+          onPress={() => setIsEditing(true)} // 👈 Entrar en modo edición al hacer clic
+        >
+          <Text style={[styles.taskText, isCompleted && styles.completedText]}>
+            {item.text}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Botón de Completado/Desmarcado */}
+      <TouchableOpacity 
+        onPress={markTaskAsCompleted} 
+        style={ isCompleted ? styles.markedButton : styles.unMarkedButton }
+      >
+        <Text style={{ color: '#fff', fontSize: 20 }}>{isCompleted ? '✓' : ' '}</Text>
       </TouchableOpacity>
+      
+      {/* Botón de Eliminar */}
       <TouchableOpacity onPress={deleteTask} style={styles.deleteButton}>
         <Text style={styles.deleteButtonText}>🗑️</Text>
       </TouchableOpacity>
@@ -44,18 +97,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
+    padding: 5, // Reducido para mejor espacio
     marginVertical: 5,
     backgroundColor: '#f9f9f9',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#ddd',
   },
+  // Nuevo estilo para el TextInput en modo edición
+  taskInput: { 
+    flex: 1, 
+    fontSize: 16, 
+    color: '#333', 
+    padding: 10,
+    borderBottomWidth: 1,
+    borderColor: '#aaa'
+  },
+  taskTextWrapper: { // Envoltura para el TouchableOpacity
+    flex: 1,
+    padding: 10,
+  },
   taskText: {
     fontSize: 16,
     color: '#333',
-    flexShrink: 1,
   },
+  completedText: { // Estilo para tachar el texto si está completado
+    textDecorationLine: 'line-through',
+    color: '#999',
+  },
+  // ... (otros estilos como deleteButton, markedButton, unMarkedButton)
   deleteButton: {
     padding: 8,
     borderRadius: 5,
@@ -72,14 +142,13 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 5,
     backgroundColor: '#dadadaff',
-    marginLeft: 'auto',
-
+    marginLeft: 10, // Ajustado
   },
 
   markedButton: {
     padding: 15,
     borderRadius: 5,
     backgroundColor: '#64b2c4ff',
-    marginLeft: 'auto',
+    marginLeft: 10, // Ajustado
   },
 });
