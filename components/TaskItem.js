@@ -1,34 +1,70 @@
 import { updateDoc } from 'firebase/firestore';
 import { useState } from 'react'; // 👈 ¡Importar useState!
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { db, deleteDoc, doc } from '../screens/firebaseConfig';
 
-export default function TaskItem({ item }) {
+export default function TaskItem({ item, uid }) {
   const [isEditing, setIsEditing] = useState(false); // 🟢 Estado para saber si estamos editando
   const [editedText, setEditedText] = useState(item.text); // 🟢 Estado para guardar el texto que se edita
   const isCompleted = item.completada;
 
-  const deleteTask = async () => {
+  const getTaskRef = () => {
+      // ⚠️ Verificar que el UID existe antes de construir la ruta
+      if (!uid) return null; 
+      // Construir la ruta: 'users/{uid}/tasks/{taskId}'
+      return doc(db, 'users', uid, 'tasks', item.id);
+  }
+
+ const deleteTask = async () => {
+    const taskRef = getTaskRef();
+    console.log("Deleting task at ref: ", taskRef);
+    if (!taskRef) return;
+    
     try {
-      await deleteDoc(doc(db, 'tasks', item.id));
+      await deleteDoc(taskRef);
     } catch (error) {
       console.error("Error al eliminar la tarea: ", error);
       alert("No se pudo eliminar la tarea. Inténtalo de nuevo.");
     }
   };
 
+  const handleDeleteTask = () => {
+    Alert.alert(
+      "Confirmar Eliminación",
+      `¿Estás seguro de que quieres eliminar la tarea "${item.text}"?`,
+      [
+        // Botón Cancelar (no hace nada)
+        {
+          text: "Cancelar",
+          style: "cancel"
+        },
+        // Botón OK (llama a la función de borrado real)
+        {
+          text: "Sí, Eliminar",
+          onPress: deleteTask,
+          style: "destructive" // Le da un color rojo al botón en iOS
+        }
+      ],
+      { cancelable: true } // Permite cerrar el diálogo tocando fuera
+    );
+  };
+
   const markTaskAsCompleted = async () => {
+    const taskRef = getTaskRef();
+    if (!taskRef) return;
+
     try {
-      // Alternamos el estado de 'completada' (true a false, o viceversa)
-      await updateDoc(doc(db, 'tasks', item.id), { completada: !isCompleted });
+      // Alternamos el estado de 'completada'
+      await updateDoc(taskRef, { completada: !isCompleted });
     } catch (error) {
       console.error("Error al marcar la tarea: ", error);
       alert("No se pudo actualizar la tarea. Inténtalo de nuevo.");
     }
   };
 
-  // 🟢 FUNCIÓN PARA GUARDAR LA EDICIÓN EN FIRESTORE
   const saveEdit = async () => {
+    const taskRef = getTaskRef();
+    if (!taskRef) return;
     if (editedText.trim() === item.text) {
         // Si el texto no cambió, solo salimos del modo edición
         setIsEditing(false);
@@ -45,8 +81,8 @@ export default function TaskItem({ item }) {
     
     try {
       // 🚀 Actualizar el documento en Firestore
-      await updateDoc(doc(db, 'tasks', item.id), { text: editedText });
-      setIsEditing(false); // Salir del modo edición
+      await updateDoc(taskRef, { text: editedText });
+      setIsEditing(false);
     } catch (error) {
       console.error("Error al editar la tarea: ", error);
       alert("No se pudo guardar la edición. Inténtalo de nuevo.");
@@ -85,7 +121,7 @@ export default function TaskItem({ item }) {
       </TouchableOpacity>
       
       {/* Botón de Eliminar */}
-      <TouchableOpacity onPress={deleteTask} style={styles.deleteButton}>
+      <TouchableOpacity onPress={handleDeleteTask} style={styles.deleteButton}>
         <Text style={styles.deleteButtonText}>🗑️</Text>
       </TouchableOpacity>
     </View>

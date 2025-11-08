@@ -1,16 +1,19 @@
-import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-// ⚠️ Ruta corregida: Sube dos niveles para llegar a components/
 import { addDoc, auth, collection, db, onSnapshot, signOut } from '@/screens/firebaseConfig';
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import TaskItem from '../../components/TaskItem';
 
 export default function HomeScreen() {
   const [task, setTask] = useState('');
   const [tasks, setTasks] = useState([]);
 
+  const user = auth.currentUser;
+
   useEffect(() => {
-    const q = collection(db, 'tasks');
+    if (!user) return; // Salir si no hay usuario
+
+    const q = collection(db, 'users', user.uid, 'tasks');
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
@@ -20,7 +23,7 @@ export default function HomeScreen() {
   const addTask = async () => {
     if (!task.trim()) return;
     // Opcional: Podrías añadir el uid del usuario para filtrar tareas: { text: task, userId: auth.currentUser.uid }
-    await addDoc(collection(db, 'tasks'), { text: task }); 
+    await addDoc(collection(db, 'users', user.uid, 'tasks'), { text: task }); 
     setTask('');
   };
 
@@ -48,7 +51,7 @@ export default function HomeScreen() {
       <FlatList
         data={tasks}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <TaskItem item={item} />}
+        renderItem={({ item }) => <TaskItem item={item} uid={user?.uid} />}
       />
 
       <TouchableOpacity style={styles.logout} onPress={handleLogout}>
